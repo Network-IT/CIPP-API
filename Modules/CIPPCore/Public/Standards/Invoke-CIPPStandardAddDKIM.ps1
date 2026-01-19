@@ -76,6 +76,7 @@ function Invoke-CIPPStandardAddDKIM {
     # Same exclusions also found in Push-DomainAnalyserTenant
     $ExclusionDomains = @(
         '*.microsoftonline.com'
+        '*.mail.onmicrosoft.com'
         '*.exclaimer.cloud'
         '*.excl.cloud'
         '*.codetwo.online'
@@ -85,6 +86,7 @@ function Invoke-CIPPStandardAddDKIM {
         '*.teams.dstny.com'
         '*.msteams.8x8.com'
         '*.ucconnect.co.uk'
+        '*.teams-sbc.dk'
     )
 
     $AllDomains = ($BatchResults | Where-Object { $_.DomainName }).DomainName | ForEach-Object {
@@ -109,6 +111,17 @@ function Invoke-CIPPStandardAddDKIM {
     # List of domains for each way to enable DKIM
     $NewDomains = $AllDomains | Where-Object { $DKIM.Domain -notcontains $_ }
     $SetDomains = $DKIM | Where-Object { $AllDomains -contains $_.Domain -and $_.Enabled -eq $false }
+
+    $MissingDKIM = [System.Collections.Generic.List[string]]::new()
+    if ($null -ne $NewDomains) {
+        $MissingDKIM.AddRange($NewDomains)
+    }
+    if ($null -ne $SetDomains) {
+        $MissingDKIM.AddRange($SetDomains.Domain)
+    }
+
+    $CurrentValue = if ($MissingDKIM.Count -eq 0) { [PSCustomObject]@{'state' = 'Configured correctly' } } else { [PSCustomObject]@{'MissingDKIM' = $MissingDKIM } }
+    $ExpectedValue = [PSCustomObject]@{'state' = 'Configured correctly' }
 
     if ($Settings.remediate -eq $true) {
 
@@ -177,7 +190,7 @@ function Invoke-CIPPStandardAddDKIM {
 
     if ($Settings.report -eq $true) {
         $DKIMState = if ($null -eq $NewDomains -and $null -eq $SetDomains) { $true } else { $SetDomains, $NewDomains }
-        Set-CIPPStandardsCompareField -FieldName 'standards.AddDKIM' -FieldValue $DKIMState -TenantFilter $tenant
+        Set-CIPPStandardsCompareField -FieldName 'standards.AddDKIM' -CurrentValue $CurrentValue -ExpectedValue $ExpectedValue -TenantFilter $tenant
         Add-CIPPBPAField -FieldName 'DKIM' -FieldValue $DKIMState -StoreAs bool -Tenant $tenant
     }
 }

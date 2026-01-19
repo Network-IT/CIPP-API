@@ -37,11 +37,10 @@ function Invoke-CIPPStandardEnableLitigationHold {
         Write-Host "We're exiting as the correct license is not present for this standard."
         return $true
     } #we're done.
-    ##$Rerun -Type Standard -Tenant $Tenant -Settings $Settings 'EnableLitigationHold'
 
     try {
         $MailboxesNoLitHold = New-ExoRequest -tenantid $Tenant -cmdlet 'Get-Mailbox' -cmdParams @{ Filter = 'LitigationHoldEnabled -eq "False"' } -Select 'UserPrincipalName,PersistedCapabilities,LitigationHoldEnabled' |
-            Where-Object { $_.PersistedCapabilities -contains 'EXCHANGE_S_ARCHIVE_ADDON' -or $_.PersistedCapabilities -contains 'EXCHANGE_S_ENTERPRISE' }
+            Where-Object { $_.PersistedCapabilities -contains 'EXCHANGE_S_ARCHIVE_ADDON' -or $_.PersistedCapabilities -contains 'EXCHANGE_S_ENTERPRISE' -or $_.PersistedCapabilities -contains 'BPOS_S_DlpAddOn' -or $_.PersistedCapabilities -contains 'BPOS_S_Enterprise' }
     } catch {
         $ErrorMessage = Get-NormalizedError -Message $_.Exception.Message
         Write-LogMessage -API 'Standards' -Tenant $Tenant -Message "Could not get the EnableLitigationHold state for $Tenant. Error: $ErrorMessage" -Sev Error
@@ -94,8 +93,16 @@ function Invoke-CIPPStandardEnableLitigationHold {
 
     if ($Settings.report -eq $true) {
         $filtered = $MailboxesNoLitHold | Select-Object -Property UserPrincipalName
-        $state = $filtered ? $MailboxesNoLitHold : $true
-        Set-CIPPStandardsCompareField -FieldName 'standards.EnableLitigationHold' -FieldValue $state -Tenant $Tenant
+        $state = $filtered ? $MailboxesNoLitHold : @()
+
+        $CurrentValue = [PSCustomObject]@{
+            EnableLitigationHold = @($state)
+        }
+        $ExpectedValue = [PSCustomObject]@{
+            EnableLitigationHold = @()
+        }
+
+        Set-CIPPStandardsCompareField -FieldName 'standards.EnableLitigationHold' -CurrentValue $CurrentValue -ExpectedValue $ExpectedValue -Tenant $Tenant
         Add-CIPPBPAField -FieldName 'EnableLitHold' -FieldValue $filtered -StoreAs json -Tenant $Tenant
     }
 }
