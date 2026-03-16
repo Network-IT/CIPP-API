@@ -18,11 +18,16 @@ function New-GraphPOSTRequest {
         $IgnoreErrors = $false,
         $returnHeaders = $false,
         $maxRetries = 3,
-        $ScheduleRetry = $false
+        $ScheduleRetry = $false,
+        $headers
     )
 
     if ($NoAuthCheck -or (Get-AuthorisedRequest -Uri $uri -TenantID $tenantid)) {
-        $headers = Get-GraphToken -tenantid $tenantid -scope $scope -AsApp $asapp -SkipCache $skipTokenCache
+        if ($Headers) {
+            $Headers = $Headers
+        } else {
+            $Headers = Get-GraphToken -tenantid $tenantid -scope $scope -AsApp $asapp -SkipCache $skipTokenCache
+        }
         if ($AddedHeaders) {
             foreach ($header in $AddedHeaders.GetEnumerator()) {
                 $headers.Add($header.Key, $header.Value)
@@ -30,14 +35,14 @@ function New-GraphPOSTRequest {
         }
 
         if (!$headers['User-Agent']) {
-            $headers['User-Agent'] = "CIPP/$($global:CippVersion ?? '1.0')"
+            $headers['User-Agent'] = "CIPP/$($env:CippVersion ?? '1.0')"
         }
 
         if (!$contentType) {
             $contentType = 'application/json; charset=utf-8'
         }
-
-        $body = Get-CIPPTextReplacement -TenantFilter $tenantid -Text $body -EscapeForJson
+        #Only do text replacement if no headers are set.
+        if (!$headers) { $body = Get-CIPPTextReplacement -TenantFilter $tenantid -Text $body -EscapeForJson }
 
         $RetryCount = 0
         $RequestSuccessful = $false
